@@ -1,0 +1,418 @@
+<html><head></head><body><div class="apidocDiv">
+<style>
+/*csslint
+*/
+.apidocDiv {
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+.apidocDiv a[href] {
+    color: #33f;
+    font-weight: bold;
+    text-decoration: none;
+}
+.apidocDiv a[href]:hover {
+    text-decoration: underline;
+}
+.apidocCodeCommentSpan {
+    background: #bbf;
+    color: #000;
+    display: block;
+}
+.apidocCodeKeywordSpan {
+    color: #d00;
+    font-weight: bold;
+}
+.apidocCodePre {
+    background: #eef;
+    border: 1px solid;
+    color: #777;
+    padding: 5px;
+    white-space: pre-wrap;
+}
+.apidocFooterDiv {
+    margin-top: 20px;
+    text-align: center;
+}
+.apidocModuleLi {
+    margin-top: 10px;
+}
+.apidocSectionDiv {
+    border-top: 1px solid;
+    margin-top: 20px;
+}
+.apidocSignatureSpan {
+    color: #777;
+    font-weight: bold;
+}
+</style>
+<h1>api documentation for
+    <a href="https://github.com/bevry/watchr">watchr (v3.0.1)</a>
+</h1>
+<h4>Better file system watching for Node.js</h4>
+<div class="apidocSectionDiv"><a href="#apidoc.tableOfContents" id="apidoc.tableOfContents"><h1>table of contents</h1></a><ol>
+
+    <li class="apidocModuleLi"><a href="#apidoc.module.watchr">module watchr</a><ol>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.watchr.Stalker">
+            function <span class="apidocSignatureSpan">watchr.</span>Stalker
+            <span class="apidocSignatureSpan">(path)</span>
+            </a>
+
+        </li>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.watchr.Watcher">
+            function <span class="apidocSignatureSpan">watchr.</span>Watcher
+            <span class="apidocSignatureSpan">(path)</span>
+            </a>
+
+        </li>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.watchr.create">
+            function <span class="apidocSignatureSpan">watchr.</span>create
+            <span class="apidocSignatureSpan">(...args)</span>
+            </a>
+
+        </li>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.watchr.open">
+            function <span class="apidocSignatureSpan">watchr.</span>open
+            <span class="apidocSignatureSpan">(path, changeListener, next)</span>
+            </a>
+
+        </li>
+
+    </ol></li>
+
+</ol></div>
+
+<div class="apidocSectionDiv">
+<h1><a href="#apidoc.module.watchr" id="apidoc.module.watchr">module watchr</a></h1>
+
+
+    <h2>
+        <a href="#apidoc.element.watchr.Stalker" id="apidoc.element.watchr.Stalker">
+        function <span class="apidocSignatureSpan">watchr.</span>Stalker
+        <span class="apidocSignatureSpan">(path)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">class Stalker extends EventEmitter {
+	<span class="apidocCodeCommentSpan">/* :: static watchers: {[key:string]: Watcher}; */
+</span>	/* :: watcher: Watcher; */
+
+	/**
+	@param {string} path - the path to watch
+	*/
+	constructor (path) {
+		super()
+
+		// Ensure global watchers singleton
+		if ( Stalker.watchers == null )  Stalker.watchers = {}
+
+		// Add our watcher to the singleton
+		if ( Stalker.watchers[path] == null )  Stalker.watchers[path] = new Watcher(path)
+		this.watcher = Stalker.watchers[path]
+
+		// Add our stalker to the watcher
+		if ( this.watcher.stalkers == null )  this.watcher.stalkers = []
+		this.watcher.stalkers.push(this)
+
+		// If the watcher closes, remove our stalker and the watcher from the singleton
+		this.watcher.once('close', () =&gt; {
+			this.remove()
+			delete Stalker.watchers[path]
+		})
+
+		// Add the listener proxies
+		this.on('newListener', (eventName, listener) =&gt; this.watcher.on(eventName, listener))
+		this.on('removeListener', (eventName, listener) =&gt; this.watcher.removeListener(eventName, listener))
+	}
+
+	/**
+	Cleanly shutdown the stalker
+	@private
+	@returns {this}
+	*/
+	remove () {
+		// Remove our stalker from the watcher
+		const index = this.watcher.stalkers.indexOf(this)
+		if ( index !== -1 ) {
+			this.watcher.stalkers = this.watcher.stalkers.slice(0, index).concat(this.watcher.stalkers.slice(index + 1))
+		}
+
+		// Kill our stalker
+		process.nextTick(() =&gt; {
+			this.removeAllListeners()
+		})
+
+		// Chain
+		return this
+	}
+
+	/**
+	Close the stalker, and if it is the last stalker for the path, close the watcher too
+	@access public
+	@param {string} [reason] - optional reason to provide for closure
+	@returns {this}
+	*/
+	close (reason /* :?string */) {
+		// Remove our stalker
+		this.remove()
+
+		// If it was the last stalker for the watcher, or if the path is deleted
+		// Then close the watcher
+		if ( reason === 'deleted' || this.watcher.stalkers.length === 0 ) {
+			this.watcher.close(reason || 'all stalkers are now gone')
+		}
+
+		// Chain
+		return this
+	}
+
+	/**
+	Alias for {@link Watcher#setConfig}
+	@access public
+	@returns {this}
+	*/
+	setConfig (...args /* :Array&lt;any&gt; */) {
+		this.watcher.setConfig(...args)
+		return this
+	}
+
+	/**
+	Alias for {@link Watcher#watch}
+	@access public
+	@returns {this}
+	*/
+	watch (...args /* :Array&lt;any&gt; */) {
+		this.watcher.watch(...args)
+		return this
+	}
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">n/a</pre></li>
+    </ul>
+
+
+
+    <h2>
+        <a href="#apidoc.element.watchr.Watcher" id="apidoc.element.watchr.Watcher">
+        function <span class="apidocSignatureSpan">watchr.</span>Watcher
+        <span class="apidocSignatureSpan">(path)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">class Watcher extends EventEmitter {
+	<span class="apidocCodeCommentSpan">/* :: stalkers: Array&lt;Stalker&gt;; */
+</span>
+	/* :: path: string; */
+	/* :: stat: null | Stats; */
+	/* :: fswatcher: null | FSWatcher; */
+	/* :: children: {[path:string]: Stalker}; */
+	/* :: state: StateEnum; */
+	/* :: listenerTaskGroup: null | TaskGroup; */
+	/* :: listenerTimeout: null | number; */
+	/* :: config: WatcherConfig; */
+
+	/**
+	@param {string} path - the path to watch
+	*/
+	constructor (path) {
+		// Construct the EventEmitter
+		super()
+
+		// Initialise properties
+		this.path = path
+		this.stat = null
+		this.fswatcher = null
+		this.children = {}
+		this.state = 'pending'
+		this.listenerTaskGroup = null
+		this.listenerTimeout = null
+
+		// Initialize our configurable properties
+		this.config = {
+			stat: null,
+			interval: 5007,
+			persistent: true,
+			catchupDelay: 2000,
+			preferredMethods: ['watch', 'watchFile'],
+			followLinks: true,
+			ignorePaths: false,
+			ignoreHiddenFiles: false,
+			ignoreCommonPatterns: true,
+			ignoreCustomPatterns: null
+		}
+	}
+
+	/**
+	Configure out Watcher
+	@param {Object} opts - the configuration to use
+	@param {Stats} [opts.stat] - A stat object for the path if we already have one, otherwise it will be fetched for us
+	@param {number} [opts.interval=5007] - If the `watchFile` method was used, this is the interval to use for change detection if
+polling is needed
+	@param {boolean} [opts.persistent=true] - If the `watchFile` method was used, this is whether or not watching should keep the node
+ process alive while active
+	@param {number} [opts.catchupDelay=2000] - This is the delay to wait after a change event to be able to detect swap file changes
+ accurately (without a delay, swap files trigger a delete and creation event, with a delay they trigger a single update event)
+	@param {Array&lt;string&gt;} [opts.preferredMethods=['watch', 'watchFile']] - The order of watch methods to attempt, if the first fails
+, move onto the second
+	@param {boolean} [opts.followLinks=true] - If true, will use `fs.stat` instead of `fs.lstat`
+	@param {Array&lt;string&gt;} [opts.ignorePaths=false] - Array of paths that should be ignored
+	@param {boolean} [opts.ignoreHiddenFiles=false] - Whether to ignore files and directories that begin with a `.`
+	@param {boolean} [opts.ignoreCommonPatterns=false] - Whether to ignore common undesirable paths (e.g. `.svn`, `.git`, `.DS_Store
+`, `thumbs.db`, etc)
+	@param {RegExp} [opts.ignoreCustomPatterns] - A regular expression that if matched again the path will ignore the path
+	@returns {this}
+	*/
+	setConfig (opts /* :WatcherOpts */) {
+		// Apply
+		extendr.extend(this.config, opts)
+
+		// Stat
+		if ( this.config.stat ) {
+			this.stat = this.config.stat
+			delete this.config.stat
+		}
+
+		// Chain
+		return this
+	}
+
+	/**
+	Emit a log event with the given arguments
+	@param {Array&lt;*&gt;} args
+	@returns {this}
+	*/
+	log (...args /* :Array&lt;any&gt; */) {
+		// Emit the log event
+		this.emit('log', ...args)
+
+		// Chain
+		return this
+	}
+
+	/**
+	Fetch the ignored configuration options into their own object
+	@private
+	@returns {Object}
+	*/
+	getIgnoredOptions () {
+		// Return the ignore options
+		return {
+			ignorePaths: this.config.ignorePaths,
+			ignoreHiddenFiles: this.config.ignoreHiddenFiles,
+			ignoreCommonPatterns: this.config.ignoreCommonPatterns,
+			ignoreCustomPatterns: this.config.ignoreCustomPatterns
+		}
+	}
+
+	/**
+	Check whether or not a path should be ignored or not based on our current configuration options
+	@private
+	@param {String} path - the path (likely of a child)
+	@returns {boolean}
+	*/
+	isIgnoredPath (path /* :string */) {
+		// Ignore?
+		const ignore = ignorefs.isIgnoredPath(path, this.getIgnoredOptions())
+
+		// Return
+		return ignore
+	}
+
+	/**
+	Get the stat for the path of the watcher
+	If the stat already exists and `opts.reset` is `false`, then just use the current stat, otherwise fetch a new stat and apply it
+ to the watcher
+	@param {Object} opts
+	@param {boolean} [opts.reset=false]
+	@param  {function} next - completion callback with signature `error:?Error, stat?:Stats`
+	@returns {this}
+	*/
+	getStat (opts /* :ResetOpts */, next /* :StatCallback ...</pre></li>
+    <li>example usage<pre class="apidocCodePre">n/a</pre></li>
+    </ul>
+
+
+
+    <h2>
+        <a href="#apidoc.element.watchr.create" id="apidoc.element.watchr.create">
+        function <span class="apidocSignatureSpan">watchr.</span>create
+        <span class="apidocSignatureSpan">(...args)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">function create(...args) {
+	return new Stalker(...args)
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">...
+stalker.close()
+```
+
+More advanced usage is:
+
+``` javascript
+// Create the stalker for the path
+var stalker = watchr.<span class="apidocCodeKeywordSpan">create</span>(path)
+
+// Listen to the events for the stalker/watcher
+// http://rawgit.com/bevry/watchr/master/docs/index.html#watcher
+stalker.on('change', listener)
+stalker.on('log', console.log)
+stalker.once('close', function (reason) {
+	console.log('closed', path, 'because', reason)
+...</pre></li>
+    </ul>
+
+
+
+    <h2>
+        <a href="#apidoc.element.watchr.open" id="apidoc.element.watchr.open">
+        function <span class="apidocSignatureSpan">watchr.</span>open
+        <span class="apidocSignatureSpan">(path, changeListener, next)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">function open(path, changeListener, next) {
+	const stalker = new Stalker(path)
+	stalker.on('change', changeListener)
+	stalker.watch({}, next)
+	return stalker
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">...
+}
+function next (err) {
+	if ( err )  return console.log('watch failed on', path, 'with error', err)
+	console.log('watch successful on', path)
+}
+
+// Watch the path with the change listener and completion callback
+var stalker = watchr.<span class="apidocCodeKeywordSpan">open</span>(path, listener, next)
+
+// Close the stalker of the watcher
+stalker.close()
+```
+
+More advanced usage is:
+...</pre></li>
+    </ul>
+
+
+</div>
+
+<div class="apidocFooterDiv">
+    [ this document was created with
+    <a href="https://github.com/kaizhu256/node-utility2" target="_blank">utility2</a>
+    ]
+</div>
+</div>
+</body></html>
